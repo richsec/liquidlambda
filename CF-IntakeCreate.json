@@ -1,0 +1,88 @@
+
+"ScheduleRuleForIntakeLambda": {
+    "Type": "AWS::Events::Rule",
+    "Properties": {
+        "Description": "Schedule Rule for Intake Lambda",
+        "ScheduleExpression": "rate(1 minute)",
+        "State": "ENABLED",
+        "Targets": [{
+            "Arn": {"Fn::GetAtt": ["IntakeLambda", "Arn"]},
+            "Id": "DailyScheduleTarget"
+        }]
+    }
+},
+"PermissionToInvokeIntakeLambda": {
+    "Type": "AWS::Lambda::Permission",
+    "Properties": {
+        "FunctionName": {"Ref": "IntakeLambda"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {"Fn::GetAtt": ["ScheduleRuleForIntakeLambda", "Arn"]}
+    }
+},
+"IntakeLambdaRole": {
+    "Type": "AWS::IAM::Role",
+    "Properties": {
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "lambda.amazonaws.com"},
+                "Action": ["sts:AssumeRole"]
+            }]
+        },
+        "Path": "/",
+        "Policies": [{
+            "PolicyName": "RSQSlogs",
+            "PolicyDocument": {
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents"
+                    ],
+                    "Resource": "arn:aws:logs:*:*:*"
+                }]
+            }
+        },
+        {
+            "PolicyName": "rsqs",
+            "PolicyDocument": {
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "sqs:ReceiveMessage"
+                    ],
+                    "Resource": {"Fn::GetAtt": ["TaskQueue", "Arn"]}
+                }
+            ]}
+        },
+        {
+            "PolicyName": "lambda",
+            "PolicyDocument": {
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "lambda:InvokeFunction"
+                    ],
+                    "Resource": {"Fn::GetAtt": ["WorkerLambda", "Arn"]}
+                }
+            ]}
+        }]
+    }
+},
+"IntakeLambda": {
+    "Type": "AWS::Lambda::Function",
+    "Properties": {
+        "Code": {
+            "S3Bucket" : {"Ref": "LambdaCodeBucket"},
+            "S3Key" : {"Ref": "IntakeLambdaCodeKey"}
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {"Fn::GetAtt": ["IntakeLambdaRole", "Arn"]},
+        "Runtime": "nodejs4.3",
+        "Timeout": 60
+    }
+}
